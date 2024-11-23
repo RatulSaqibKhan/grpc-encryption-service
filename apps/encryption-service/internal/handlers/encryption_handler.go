@@ -90,6 +90,11 @@ func (h *EncryptionHandler) Decrypt(ctx context.Context, req *pb.DecryptRequest)
 
 	for _, encryptedText := range req.EncryptedTexts {
 		log.Printf("Decryption request of '%s'", encryptedText)
+		
+		if encryptedText == "" {
+			log.Printf("Error: Empty encrypted text in decryption request")
+			continue // Skip empty encrypted texts
+		}
 
 		var plaintext string
 		var err error
@@ -116,8 +121,8 @@ func (h *EncryptionHandler) Decrypt(ctx context.Context, req *pb.DecryptRequest)
 		// Step 3: Decrypt using the decryption script
 		plaintext, err = encryption.Decrypt(encryptedText)
 		if err != nil {
-			log.Printf("Error during decryption of '%s': %v", encryptedText, err)
-			return nil, err
+			log.Printf("Skipping decryption of '%s' due to error: %v", encryptedText, err)
+			continue
 		}
 
 		// Save the decrypted plaintext to MySQL
