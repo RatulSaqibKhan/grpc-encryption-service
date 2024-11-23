@@ -1,0 +1,42 @@
+# Go build files
+/build/
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go modules
+go.mod
+go.sum
+vendor/
+
+# IDE/editor specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.DS_Store
+
+# Logs and temp files
+*.log
+*.out
+*.tmp
+
+# Test binaries
+*.test
+
+# Dependency directories
+node_modules/
+*.env
+
+# Coverage files
+coverage.out
+
+# Debugging files
+*.prof
+*.trace
+
+# docker
+docker-compose.override.yml

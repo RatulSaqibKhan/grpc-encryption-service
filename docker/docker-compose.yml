@@ -1,0 +1,7 @@
+services:
+  encryption-service:
+    build:
+      context: ${DOCKER_BUILD_CONTEXT_DIR}
+      dockerfile: ./docker/dockerfiles/encryption-service.Dockerfile
+    env_file:
+      - ./envs/encryption-service.env

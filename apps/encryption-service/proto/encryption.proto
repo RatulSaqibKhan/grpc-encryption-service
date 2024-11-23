@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package encryption;
+
+// Specify the Go package for generated files
+option go_package = "./proto;proto";
+
+service EncryptionService {
+  rpc Encrypt (EncryptRequest) returns (EncryptResponse);
+  rpc Decrypt (DecryptRequest) returns (DecryptResponse);
+}
+
+message EncryptRequest {
+  repeated string plaintexts = 1; // Array of plaintexts
+}
+
+message EncryptResponse {
+  repeated string encrypted_texts = 1; // Array of encrypted texts
+}
+
+message DecryptRequest {
+  repeated string encrypted_texts = 1; // Array of encrypted texts
+}
+
+message DecryptResponse {
+  repeated string plaintexts = 1; // Array of decrypted plaintexts
+}

@@ -1,0 +1,12 @@
+networks:
+  common-net:
+    external: true
+
+services:
+  encryption-service:
+    ports:
+      - ${ENCRYPTION_SERVICE_GRPC_PORT}:50051
+    networks:
+      common-net:
+        aliases:
+          - common-encryption-service
