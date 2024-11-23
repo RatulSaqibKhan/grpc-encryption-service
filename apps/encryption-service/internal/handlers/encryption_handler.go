@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"context"
-	"log"
+	"github.com/sirupsen/logrus"
 	"runtime"
 	"time"
+	"os"
 
 	"encryption-service/internal/encryption"
 	repository "encryption-service/internal/repositories"
@@ -16,35 +17,81 @@ type EncryptionHandler struct {
 	MySQLRepo repository.MySQLRepository
 }
 
+var logger = logrus.New()
+
+// Initialize logger to use JSON format and set log level based on environment
+func init() {
+	// Set JSON formatter
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	// Get the environment variable
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "dev" // Default to 'dev' if no environment variable is set
+	}
+
+	// Set log level based on environment
+	switch env {
+	case "prod":
+		logger.SetLevel(logrus.WarnLevel) // In production, log at 'warn' or higher
+	case "stage":
+		logger.SetLevel(logrus.InfoLevel) // In staging, log at 'info' level
+	default:
+		logger.SetLevel(logrus.DebugLevel) // In dev, log everything (debug, info, warn, error, fatal)
+	}
+}
+
 // logSystemStats logs the CPU and memory utilization.
-func logSystemStats(operation string) {
+func logSystemStats(operation string, requestID string) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
 	// Log memory usage
-	log.Printf("[%s] Memory Usage: Alloc = %v KB, TotalAlloc = %v KB, Sys = %v KB, NumGC = %v",
-		operation, memStats.Alloc/1024, memStats.TotalAlloc/1024, memStats.Sys/1024, memStats.NumGC)
+	logger.WithFields(logrus.Fields{
+		"operation": operation,
+		"request_id": requestID,
+		"memory_alloc": memStats.Alloc / 1024,
+		"memory_total_alloc": memStats.TotalAlloc / 1024,
+		"memory_sys": memStats.Sys / 1024,
+		"gc_count": memStats.NumGC,
+	}).Infof("System stats")
 
 	// CPU stats (simple tracking with Goroutines)
 	numCPU := runtime.NumCPU()
-	log.Printf("[%s] CPU Utilization: NumCPU = %d", operation, numCPU)
+	logger.WithFields(logrus.Fields{
+		"operation": operation,
+		"request_id": requestID,
+		"cpu_count": numCPU,
+	}).Infof("CPU stats")
 }
 
 // Encrypt handles encryption of an array of plaintexts.
 func (h *EncryptionHandler) Encrypt(ctx context.Context, req *pb.EncryptRequest) (*pb.EncryptResponse, error) {
 	startTime := time.Now() // Track the start time
+	requestID := req.RequestId
+	plainTexts := req.Plaintexts
+	
+	logger.WithFields(logrus.Fields{
+		"operation": "[Encryption]",
+		"request_id": requestID,
+		"texts": plainTexts,
+		"total_texts": len(plainTexts),
+	}).Warnf("Encryption Request")
+
 	defer func() {
 		duration := time.Since(startTime)
-		log.Printf("[Encrypt] Total Execution Time: %v", duration)
-		logSystemStats("Encrypt")
+		logger.WithFields(logrus.Fields{
+			"operation": "Encrypt",
+			"request_id": requestID,
+			"duration": duration,
+		}).Info("Total Execution Time")
+		logSystemStats("Encrypt", requestID)
 	}()
 
 	var encryptedTexts []string
 	var redisKey string
 
-	for _, plaintext := range req.Plaintexts {
-		log.Printf("Encryption request of '%s'", plaintext)
-
+	for _, plaintext := range plainTexts {
 		// Check if the encrypted data exists in MySQL
 		encrypted, err := h.MySQLRepo.GetEncrypted(plaintext)
 		if err == nil {
@@ -55,19 +102,19 @@ func (h *EncryptionHandler) Encrypt(ctx context.Context, req *pb.EncryptRequest)
 		// Encrypt the plaintext
 		encrypted, err = encryption.Encrypt(plaintext)
 		if err != nil {
-			log.Printf("Error during encryption of '%s': %v", plaintext, err)
+			logger.Errorf("Error during encryption of '%s': %v", plaintext, err)
 			return nil, err
 		}
 
 		// Save to MySQL
 		if err := h.MySQLRepo.SaveEncrypted(plaintext, encrypted); err != nil {
-			log.Printf("Error saving to MySQL: %v", err)
+			logger.Errorf("Error saving to MySQL: %v", err)
 		}
 
 		redisKey = "go_encryption:decrypted:" + encrypted
 		// Save to Redis
 		if err := h.RedisRepo.Set(ctx, redisKey, plaintext); err != nil {
-			log.Printf("Error saving to Redis: %v", err)
+			logger.Errorf("Error saving to Redis: %v", err)
 		}
 
 		encryptedTexts = append(encryptedTexts, encrypted)
@@ -79,20 +126,32 @@ func (h *EncryptionHandler) Encrypt(ctx context.Context, req *pb.EncryptRequest)
 // Decrypt handles decryption of an array of encrypted texts.
 func (h *EncryptionHandler) Decrypt(ctx context.Context, req *pb.DecryptRequest) (*pb.DecryptResponse, error) {
 	startTime := time.Now() // Track the start time
+	requestID := req.RequestId
+	encryptedTexts := req.EncryptedTexts
+	
+	logger.WithFields(logrus.Fields{
+		"operation": "[Decryption]",
+		"request_id": requestID,
+		"encrypted_texts": encryptedTexts,
+		"total_encrypted_texts": len(encryptedTexts),
+	}).Warnf("Decryption Request")
+
 	defer func() {
 		duration := time.Since(startTime)
-		log.Printf("[Decrypt] Total Execution Time: %v", duration)
-		logSystemStats("Decrypt")
+		logger.WithFields(logrus.Fields{
+			"operation": "Decrypt",
+			"request_id": requestID,
+			"duration": duration,
+		}).Info("Total Execution Time")
+		logSystemStats("Decrypt", requestID)
 	}()
 
 	var plaintexts []string
 	var redisKey string
 
-	for _, encryptedText := range req.EncryptedTexts {
-		log.Printf("Decryption request of '%s'", encryptedText)
-		
+	for _, encryptedText := range encryptedTexts {
 		if encryptedText == "" {
-			log.Printf("Error: Empty encrypted text in decryption request")
+			logger.Warn("Error: Empty encrypted text in decryption request")
 			continue // Skip empty encrypted texts
 		}
 
@@ -112,7 +171,7 @@ func (h *EncryptionHandler) Decrypt(ctx context.Context, req *pb.DecryptRequest)
 		if err == nil {
 			// Store in Redis for future use
 			if cacheErr := h.RedisRepo.Set(ctx, encryptedText, plaintext); cacheErr != nil {
-				log.Printf("Error caching to Redis: %v", cacheErr)
+				logger.Errorf("Error caching to Redis: %v", cacheErr)
 			}
 			plaintexts = append(plaintexts, plaintext)
 			continue
@@ -121,18 +180,18 @@ func (h *EncryptionHandler) Decrypt(ctx context.Context, req *pb.DecryptRequest)
 		// Step 3: Decrypt using the decryption script
 		plaintext, err = encryption.Decrypt(encryptedText)
 		if err != nil {
-			log.Printf("Skipping decryption of '%s' due to error: %v", encryptedText, err)
+			logger.Warnf("Skipping decryption of '%s' due to error: %v", encryptedText, err)
 			continue
 		}
 
 		// Save the decrypted plaintext to MySQL
 		if dbErr := h.MySQLRepo.SaveEncrypted(encryptedText, plaintext); dbErr != nil {
-			log.Printf("Error saving to MySQL: %v", dbErr)
+			logger.Errorf("Error saving to MySQL: %v", dbErr)
 		}
 
 		// Save the decrypted plaintext to Redis
 		if cacheErr := h.RedisRepo.Set(ctx, encryptedText, plaintext); cacheErr != nil {
-			log.Printf("Error caching to Redis: %v", cacheErr)
+			logger.Errorf("Error caching to Redis: %v", cacheErr)
 		}
 
 		plaintexts = append(plaintexts, plaintext)

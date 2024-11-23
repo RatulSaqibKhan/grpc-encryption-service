@@ -12,6 +12,7 @@ service EncryptionService {
 
 message EncryptRequest {
   repeated string plaintexts = 1; // Array of plaintexts
+  string request_id = 2;  // New field for request ID
 }
 
 message EncryptResponse {
@@ -20,6 +21,7 @@ message EncryptResponse {
 
 message DecryptRequest {
   repeated string encrypted_texts = 1; // Array of encrypted texts
+  string request_id = 2;  // New field for request ID
 }
 
 message DecryptResponse {
