@@ -30,5 +30,14 @@ The **Encryption Service** is a high-performance microservice for encrypting and
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-repo/go-encryption-service.git
-cd go-encryption-service
+git clone https://github.com/RatulSaqibKhan/grpc-encryption-service.git
+cd grpc-encryption-service
+```
+### 2. Run using docker
+  - cd docker
+  - create env files in `docker/envs` using example file
+  - create `docker/.env` file from `docker/.env.example`
+  - create `docker/docker-compose.override.yml` from `docker/docker-compose.override.yml.example`
+  - Run `docker compose build encryption-service`
+  - Run `docker compose up -d encryption-service` to run the service
+
